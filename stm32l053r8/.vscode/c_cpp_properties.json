@@ -1,0 +1,99 @@
+//
+// !!! WARNING !!! AUTO-GENERATED FILE!
+// PLEASE DO NOT MODIFY IT AND USE "platformio.ini":
+// https://docs.platformio.org/page/projectconf/section_env_build.html#build-flags
+//
+{
+    "configurations": [
+        {
+            "name": "PlatformIO",
+            "includePath": [
+                "/Users/joseph/Documents/tetris/stm32l053r8/Inc",
+                "/Users/joseph/Documents/tetris/stm32l053r8/Src",
+                "/Users/joseph/.platformio/packages/framework-stm32cubel0/Drivers/BSP/Components/Common",
+                "/Users/joseph/.platformio/packages/framework-stm32cubel0/Drivers/CMSIS/DSP/Include",
+                "/Users/joseph/.platformio/packages/framework-stm32cubel0/Drivers/CMSIS/Include",
+                "/Users/joseph/.platformio/packages/framework-stm32cubel0/Drivers/CMSIS/Device/ST/STM32L0xx/Include",
+                "/Users/joseph/.platformio/packages/framework-stm32cubel0/Drivers/STM32L0xx_HAL_Driver/Inc",
+                "/Users/joseph/.platformio/packages/framework-stm32cubel0/Drivers/STM32L0xx_HAL_Driver/Src",
+                "/Users/joseph/.platformio/packages/framework-stm32cubel0/Drivers/BSP/Components/gde021a1",
+                "/Users/joseph/.platformio/packages/framework-stm32cubel0/Drivers/BSP/Components/mfxstm32l152",
+                "/Users/joseph/.platformio/packages/framework-stm32cubel0/Drivers/BSP/Components/hx8347d",
+                "/Users/joseph/.platformio/packages/framework-stm32cubel0/Drivers/BSP/Components/stlm75",
+                "/Users/joseph/.platformio/packages/framework-stm32cubel0/Drivers/BSP/Components/st7735",
+                "/Users/joseph/.platformio/packages/framework-stm32cubel0/Drivers/BSP/Adafruit_Shield",
+                "/Users/joseph/.platformio/packages/framework-stm32cubel0/Utilities/CPU",
+                "/Users/joseph/.platformio/packages/framework-stm32cubel0/Utilities/Log",
+                "/Users/joseph/.platformio/packages/framework-stm32cubel0/Utilities/Fonts",
+                "/Users/joseph/.platformio/packages/framework-stm32cubel0/Middlewares/ST/STM32_USB_Device_Library/Core/Inc",
+                "/Users/joseph/.platformio/packages/framework-stm32cubel0/Middlewares/ST/STM32_USB_Device_Library/Core/Src",
+                "/Users/joseph/.platformio/packages/framework-stm32cubel0/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc",
+                "/Users/joseph/.platformio/packages/framework-stm32cubel0/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src",
+                "/Users/joseph/.platformio/packages/framework-stm32cubel0/Middlewares/ST/STM32_USB_Device_Library/Class/DFU/Inc",
+                "/Users/joseph/.platformio/packages/framework-stm32cubel0/Middlewares/ST/STM32_USB_Device_Library/Class/DFU/Src",
+                "/Users/joseph/.platformio/packages/framework-stm32cubel0/Middlewares/ST/STM32_USB_Device_Library/Class/AUDIO/Inc",
+                "/Users/joseph/.platformio/packages/framework-stm32cubel0/Middlewares/ST/STM32_USB_Device_Library/Class/AUDIO/Src",
+                "/Users/joseph/.platformio/packages/framework-stm32cubel0/Middlewares/ST/STM32_USB_Device_Library/Class/MSC/Inc",
+                "/Users/joseph/.platformio/packages/framework-stm32cubel0/Middlewares/ST/STM32_USB_Device_Library/Class/MSC/Src",
+                "/Users/joseph/.platformio/packages/framework-stm32cubel0/Middlewares/ST/STM32_USB_Device_Library/Class/HID/Inc",
+                "/Users/joseph/.platformio/packages/framework-stm32cubel0/Middlewares/ST/STM32_USB_Device_Library/Class/HID/Src",
+                "/Users/joseph/.platformio/packages/framework-stm32cubel0/Middlewares/ST/STM32_USB_Device_Library/Class/CustomHID/Inc",
+                "/Users/joseph/.platformio/packages/framework-stm32cubel0/Middlewares/ST/STM32_USB_Device_Library/Class/CustomHID/Src",
+                "/Users/joseph/.platformio/packages/tool-unity",
+                ""
+            ],
+            "browse": {
+                "limitSymbolsToIncludedHeaders": true,
+                "path": [
+                    "/Users/joseph/Documents/tetris/stm32l053r8/Inc",
+                    "/Users/joseph/Documents/tetris/stm32l053r8/Src",
+                    "/Users/joseph/.platformio/packages/framework-stm32cubel0/Drivers/BSP/Components/Common",
+                    "/Users/joseph/.platformio/packages/framework-stm32cubel0/Drivers/CMSIS/DSP/Include",
+                    "/Users/joseph/.platformio/packages/framework-stm32cubel0/Drivers/CMSIS/Include",
+                    "/Users/joseph/.platformio/packages/framework-stm32cubel0/Drivers/CMSIS/Device/ST/STM32L0xx/Include",
+                    "/Users/joseph/.platformio/packages/framework-stm32cubel0/Drivers/STM32L0xx_HAL_Driver/Inc",
+                    "/Users/joseph/.platformio/packages/framework-stm32cubel0/Drivers/STM32L0xx_HAL_Driver/Src",
+                    "/Users/joseph/.platformio/packages/framework-stm32cubel0/Drivers/BSP/Components/gde021a1",
+                    "/Users/joseph/.platformio/packages/framework-stm32cubel0/Drivers/BSP/Components/mfxstm32l152",
+                    "/Users/joseph/.platformio/packages/framework-stm32cubel0/Drivers/BSP/Components/hx8347d",
+                    "/Users/joseph/.platformio/packages/framework-stm32cubel0/Drivers/BSP/Components/stlm75",
+                    "/Users/joseph/.platformio/packages/framework-stm32cubel0/Drivers/BSP/Components/st7735",
+                    "/Users/joseph/.platformio/packages/framework-stm32cubel0/Drivers/BSP/Adafruit_Shield",
+                    "/Users/joseph/.platformio/packages/framework-stm32cubel0/Utilities/CPU",
+                    "/Users/joseph/.platformio/packages/framework-stm32cubel0/Utilities/Log",
+                    "/Users/joseph/.platformio/packages/framework-stm32cubel0/Utilities/Fonts",
+                    "/Users/joseph/.platformio/packages/framework-stm32cubel0/Middlewares/ST/STM32_USB_Device_Library/Core/Inc",
+                    "/Users/joseph/.platformio/packages/framework-stm32cubel0/Middlewares/ST/STM32_USB_Device_Library/Core/Src",
+                    "/Users/joseph/.platformio/packages/framework-stm32cubel0/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc",
+                    "/Users/joseph/.platformio/packages/framework-stm32cubel0/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src",
+                    "/Users/joseph/.platformio/packages/framework-stm32cubel0/Middlewares/ST/STM32_USB_Device_Library/Class/DFU/Inc",
+                    "/Users/joseph/.platformio/packages/framework-stm32cubel0/Middlewares/ST/STM32_USB_Device_Library/Class/DFU/Src",
+                    "/Users/joseph/.platformio/packages/framework-stm32cubel0/Middlewares/ST/STM32_USB_Device_Library/Class/AUDIO/Inc",
+                    "/Users/joseph/.platformio/packages/framework-stm32cubel0/Middlewares/ST/STM32_USB_Device_Library/Class/AUDIO/Src",
+                    "/Users/joseph/.platformio/packages/framework-stm32cubel0/Middlewares/ST/STM32_USB_Device_Library/Class/MSC/Inc",
+                    "/Users/joseph/.platformio/packages/framework-stm32cubel0/Middlewares/ST/STM32_USB_Device_Library/Class/MSC/Src",
+                    "/Users/joseph/.platformio/packages/framework-stm32cubel0/Middlewares/ST/STM32_USB_Device_Library/Class/HID/Inc",
+                    "/Users/joseph/.platformio/packages/framework-stm32cubel0/Middlewares/ST/STM32_USB_Device_Library/Class/HID/Src",
+                    "/Users/joseph/.platformio/packages/framework-stm32cubel0/Middlewares/ST/STM32_USB_Device_Library/Class/CustomHID/Inc",
+                    "/Users/joseph/.platformio/packages/framework-stm32cubel0/Middlewares/ST/STM32_USB_Device_Library/Class/CustomHID/Src",
+                    "/Users/joseph/.platformio/packages/tool-unity",
+                    ""
+                ]
+            },
+            "defines": [
+                "PLATFORMIO=50204",
+                "STM32L053xx",
+                "USE_HAL_DRIVER",
+                "F_CPU=32000000L",
+                ""
+            ],
+            "compilerPath": "/Users/joseph/.platformio/packages/toolchain-gccarmnoneeabi/bin/arm-none-eabi-gcc",
+            "compilerArgs": [
+                "-mthumb",
+                "-mcpu=cortex-m0plus",
+                ""
+            ]
+        }
+    ],
+    "version": 4
+}
