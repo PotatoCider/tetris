@@ -5,6 +5,7 @@
 #include "stm32_adafruit_lcd.h"
 #include "stm32f4xx_hal.h"
 #include "string.h"
+#include "usbd_cdc_if.h"
 
 #define TICK_MS 300
 
@@ -17,9 +18,13 @@
 #define DISPLAY_HEIGHT 20
 #define DISPLAY_SIZE (DISPLAY_WIDTH * DISPLAY_HEIGHT)
 
-// extern char uart_tx_buf[];
+extern char usb_tx_buf[];
 // #define PRINTF(fmt, args...) sprintf(uart_tx_buf + strlen(uart_tx_buf), fmt, ##args)
-#define PRINTF(fmt, args...) ((void)0)
+#define PRINTF(fmt, args...) ({                                                  \
+    sprintf(usb_tx_buf, fmt, ##args);                                            \
+    while (CDC_Transmit_FS((uint8_t*)usb_tx_buf, strlen(usb_tx_buf)) != USBD_OK) \
+        ;                                                                        \
+})
 
 #define NUM_OF_TETRIMINOS 7
 enum Tetrimino {
@@ -31,7 +36,7 @@ enum Tetrimino {
     Tetrimino_S,
     Tetrimino_T,
     Tetrimino_Z,
-    Falling_Tetrimino,  // 0b1000: used to set falling piece
+    Falling_Tetrimino,  // used to set falling piece
     Falling_Tetrimino_I,
     Falling_Tetrimino_J,
     Falling_Tetrimino_L,
@@ -39,7 +44,7 @@ enum Tetrimino {
     Falling_Tetrimino_S,
     Falling_Tetrimino_T,
     Falling_Tetrimino_Z,
-    Visual_Tetrimino,  // 0b1 0000: used to visualize where falling piece hard drops
+    // Visual_Tetrimino,  // used to visualize where falling piece hard drops
 };
 
 #define IS_FALLING_TETRIMINO(T) (T & Falling_Tetrimino)
@@ -264,6 +269,23 @@ uint8_t get_cur_pos(uint8_t tx, uint8_t ty) {
     return tx + cur_x + (ty + cur_y) * BOARD_WIDTH;
 }
 
+void debug_print_board() {
+    for (uint8_t y = 0; y < BOARD_HEIGHT; y++) {
+        char row[BOARD_WIDTH + 2];
+        for (uint8_t x = 0; x < BOARD_WIDTH; x++) {
+            enum Tetrimino cell = board[x + y * BOARD_WIDTH];
+            if (cell >= 0 && cell <= 10) {
+                row[x] = cell + '0';
+            } else {
+                row[x] = cell + 'A';
+            }
+        }
+        row[BOARD_WIDTH] = '\n';
+        row[BOARD_WIDTH + 1] = 0;
+        PRINTF("%s", row);
+    }
+}
+
 void draw(uint8_t x, uint8_t y, volatile uint16_t color) {
     uint16_t px_x = x * TETRIMINO_PX_SIZE + TETRIMINO_PX_TOP_LEFT_PADDING;
     uint16_t px_y = y * TETRIMINO_PX_SIZE + TETRIMINO_PX_TOP_LEFT_PADDING;
@@ -306,6 +328,7 @@ bool check_collision(uint8_t new_x, uint8_t new_y, uint8_t new_rot) {
 }
 
 bool Tetris_SpawnPiece() {
+    PRINTF("spawn piece\n");
     cur_tetrimino = (enum Tetrimino)(rand() % NUM_OF_TETRIMINOS + 1);
     cur_rotation = 0;
 
@@ -405,11 +428,11 @@ bool clear_lines() {
 void drop_lines() {
     if (clines_len == 0) return;
 
-    uint8_t i = clines_len - 1;
+    uint8_t i = 0;
     for (uint8_t y = clines[i]; y >= 1; y--) {
         if (i < clines_len && y == clines[i]) {
             PRINTF("len %u drop %u\n", clines_len, y);
-            i--;
+            i++;
             continue;
         }
 
@@ -428,6 +451,7 @@ void drop_lines() {
 }
 
 void Tetris_StartGame() {
+    PRINTF("start game\n");
     memset(board, Tetrimino_Empty, BOARD_SIZE);
     memset(prev_board, Tetrimino_Empty, BOARD_SIZE);
     clines_len = 0;
@@ -457,6 +481,7 @@ void Tetris_StartGame() {
 }
 
 void Tetris_Tick() {
+    // debug_print_board();
     if (cur_tetrimino == Tetrimino_Empty) {
         bool spawn_ok = Tetris_SpawnPiece();
         if (!spawn_ok) return Tetris_StartGame();
@@ -478,7 +503,7 @@ void Tetris_Tick() {
     }
 
     if (!move_ok) {
-        // PRINTF("collision\n");
+        // PRINTF("stick\n");
         stick_cur_tetrimino();
         bool lc = clear_lines();
 
