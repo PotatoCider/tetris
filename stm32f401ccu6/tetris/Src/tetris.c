@@ -20,10 +20,10 @@
 
 extern char usb_tx_buf[];
 // #define PRINTF(fmt, args...) sprintf(uart_tx_buf + strlen(uart_tx_buf), fmt, ##args)
-#define PRINTF(fmt, args...) ({                                                  \
-    sprintf(usb_tx_buf, fmt, ##args);                                            \
-    while (CDC_Transmit_FS((uint8_t*)usb_tx_buf, strlen(usb_tx_buf)) != USBD_OK) \
-        ;                                                                        \
+#define PRINTF(fmt, args...) ({                                                    \
+    sprintf(usb_tx_buf, fmt, ##args);                                              \
+    while (CDC_Transmit_FS((uint8_t*)usb_tx_buf, strlen(usb_tx_buf)) == USBD_BUSY) \
+        ;                                                                          \
 })
 
 #define NUM_OF_TETRIMINOS 7
@@ -36,7 +36,7 @@ enum Tetrimino {
     Tetrimino_S,
     Tetrimino_T,
     Tetrimino_Z,
-    Falling_Tetrimino,  // used to set falling piece
+    Falling_Tetrimino = 0x08,  // used to set falling piece
     Falling_Tetrimino_I,
     Falling_Tetrimino_J,
     Falling_Tetrimino_L,
@@ -44,7 +44,7 @@ enum Tetrimino {
     Falling_Tetrimino_S,
     Falling_Tetrimino_T,
     Falling_Tetrimino_Z,
-    // Visual_Tetrimino,  // used to visualize where falling piece hard drops
+    Visual_Tetrimino = 0x10,  // used to visualize where falling piece hard drops
 };
 
 #define IS_FALLING_TETRIMINO(T) (T & Falling_Tetrimino)
@@ -228,7 +228,7 @@ const uint8_t* Tetrimino_Shapes[] = {
     [Falling_Tetrimino_Z] = Tetrimino_Shape_Z,
 };
 
-const volatile uint16_t Tetrimino_Colors[] = {
+const uint16_t Tetrimino_Colors[] = {
     [Tetrimino_Empty] = 0,
     [Tetrimino_I] = LCD_COLOR_CYAN,
     [Tetrimino_J] = LCD_COLOR_BLUE,
@@ -264,6 +264,8 @@ uint8_t clines_len = 0;
 // how many ticks to wait before collision check & gravity
 uint8_t wait_ticks = 0;
 
+uint32_t cur_score = 0;
+
 // get position of square based on tetrimino's coordinates
 uint8_t get_cur_pos(uint8_t tx, uint8_t ty) {
     return tx + cur_x + (ty + cur_y) * BOARD_WIDTH;
@@ -274,10 +276,12 @@ void debug_print_board() {
         char row[BOARD_WIDTH + 2];
         for (uint8_t x = 0; x < BOARD_WIDTH; x++) {
             enum Tetrimino cell = board[x + y * BOARD_WIDTH];
-            if (cell >= 0 && cell <= 10) {
+            if (cell == 0) {
+                row[x] = ' ';
+            } else if (cell > 0 && cell < 8) {
                 row[x] = cell + '0';
             } else {
-                row[x] = cell + 'A';
+                row[x] = cell + 'a';
             }
         }
         row[BOARD_WIDTH] = '\n';
@@ -296,6 +300,7 @@ void draw(uint8_t x, uint8_t y, volatile uint16_t color) {
 }
 
 void update_screen(bool force) {
+    // draw board
     for (uint8_t y = 0; y < DISPLAY_HEIGHT; y++) {
         for (uint8_t x = 0; x < DISPLAY_WIDTH; x++) {
             uint8_t pos = x + (y + 4) * BOARD_WIDTH;
@@ -304,6 +309,15 @@ void update_screen(bool force) {
                 draw(x, y, Tetrimino_Colors[board[pos]]);
             }
         }
+    }
+
+    static uint32_t prev_score = 0;
+    // update score
+    if (prev_score != cur_score || force) {
+        prev_score = cur_score;
+        char score_str[12];  // -ve sign, 10 digits, nul term
+        sprintf(score_str, "%u", cur_score);
+        BSP_LCD_DisplayStringAtLine(0, score_str);
     }
 }
 
@@ -447,6 +461,22 @@ void drop_lines() {
         }
         if (empty) break;
     }
+
+    // update score
+    switch (clines_len) {
+        case 1:
+            cur_score += 40;
+            break;
+        case 2:
+            cur_score += 100;
+            break;
+        case 3:
+            cur_score += 300;
+            break;
+        case 4:
+            cur_score += 1200;
+            break;
+    }
     clines_len = 0;
 }
 
@@ -460,6 +490,7 @@ void Tetris_StartGame() {
     cur_x = 0;
     cur_y = 0;
     wait_ticks = 0;
+    cur_score = 0;
 
     // draw vertical lines
     for (int x = 0; x <= DISPLAY_WIDTH; x++) {
@@ -470,6 +501,8 @@ void Tetris_StartGame() {
 
         BSP_LCD_DrawLine(x * TETRIMINO_PX_SIZE, 0, x * TETRIMINO_PX_SIZE, DISPLAY_HEIGHT * TETRIMINO_PX_SIZE);
     }
+
+    // draw horizontal lines
     for (int y = 0; y <= DISPLAY_HEIGHT; y++) {
         if (y == 0 || y == DISPLAY_HEIGHT)
             BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
