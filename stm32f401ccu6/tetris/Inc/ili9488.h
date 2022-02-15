@@ -1,3 +1,4 @@
+// clang-format off
 /* Interface mode
    - 0: SPI mode (the lcd does not work in 16bit/pixel mode in spi, so you have to write 24bit/pixel)
    - 1: paralell mode */
@@ -9,7 +10,7 @@
    - 2: 320x480 micro-sd in the bottom (portrait)
    - 3: 480x320 micro-sd in the right (landscape)
 */
-#define  ILI9488_ORIENTATION       0
+#define  ILI9488_ORIENTATION       2
 
 /* Color mode
    - 0: RGB565 (R:bit15..11, G:bit10..5, B:bit4..0) (default)
@@ -31,7 +32,7 @@
 
 /* For multi-threaded or intermittent use, Lcd and Touchscreen simultaneous use can cause confusion (since it uses common I/O resources)
    Lcd functions wait for the touchscreen header, the touchscreen query is not executed when Lcd is busy.
-   Note: If the priority of the Lcd is higher than that of the Touchscreen, it may end up in an infinite loop!
+  ï¿½Note: If the priority of the Lcd is higher than that of the Touchscreen, it may end up in an infinite loop!
    - 0: multi-threaded protection disabled (default)
    - 1: multi-threaded protection enabled
 */

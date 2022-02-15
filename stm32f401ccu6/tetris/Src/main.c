@@ -23,6 +23,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "printf.h"
 #include "stdbool.h"
 #include "stdio.h"
 #include "stdlib.h"
@@ -64,12 +65,44 @@ static void MX_GPIO_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 char usb_tx_buf[256] = {0};
-#define PRINTF(fmt, args...) ({                                 \
-    sprintf(usb_tx_buf, fmt, ##args);                           \
-    CDC_Transmit_FS((uint8_t *)usb_tx_buf, strlen(usb_tx_buf)); \
-})
 
 char usb_rx_buf[64];
+
+bool GPIO_pressed(GPIO_TypeDef *GPIOx, uint16_t pin, int i, bool das) {
+    static bool button_active[8] = {false};
+    static bool button_das[8] = {false};
+    static uint32_t last_active[8] = {0};
+    static uint32_t last_das[8] = {0};
+
+    uint32_t now = HAL_GetTick();
+    if (HAL_GPIO_ReadPin(GPIOx, pin) == 0) {
+        uint32_t last = last_active[i];
+        bool active = button_active[i];
+        button_active[i] = true;
+        last_active[i] = now;
+
+        if (now - last > 50 && !active) {
+            button_das[i] = false;
+            last_das[i] = now;
+            return true;
+        }
+
+        if (!button_das[i] && now - last_das[i] > 300) {
+            button_das[i] = true;
+            last_das[i] = now;
+            return true;
+        }
+        if (button_das[i] && now - last_das[i] > 50) {
+            last_das[i] = now;
+            return das;
+        }
+
+    } else {
+        button_active[i] = false;
+        button_das[i] = false;
+    }
+    return false;
+}
 /* USER CODE END 0 */
 
 /**
@@ -101,54 +134,85 @@ int main(void) {
     MX_GPIO_Init();
     MX_USB_DEVICE_Init();
     /* USER CODE BEGIN 2 */
+    // PRINTF("start\n");
     BSP_LCD_Init();
     BSP_LCD_Clear(LCD_COLOR_BLACK);
     Tetris_StartGame();
-    USBD_CDC_SetRxBuffer(&hUsbDeviceFS, (uint8_t *)usb_rx_buf);
-    USBD_CDC_ReceivePacket(&hUsbDeviceFS);
-    memset(usb_rx_buf, 0, sizeof(usb_rx_buf));
+    // USBD_CDC_SetRxBuffer(&hUsbDeviceFS, (uint8_t *)usb_rx_buf);
+    // USBD_CDC_ReceivePacket(&hUsbDeviceFS);
+    // memset(usb_rx_buf, 0, sizeof(usb_rx_buf));
     // HAL_UART_Transmit(&huart1, "testing\n", 9, 10);
     /* USER CODE END 2 */
 
     /* Infinite loop */
     /* USER CODE BEGIN WHILE */
-    // uint32_t last = HAL_GetTick();
-    bool button_active = false;
+    uint32_t last_active = HAL_GetTick();
     while (1) {
-        if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == 0) {
-            if (!button_active) Tetris_RotatePiece(true);
-            button_active = true;
-        } else {
-            button_active = false;
+        uint32_t now = HAL_GetTick();
+
+        if (GPIO_pressed(GPIOC, GPIO_PIN_14, 6, true)) {
+            PRINTF("C14\n");
+            Tetris_RotatePiece(true);
+        }
+        if (GPIO_pressed(GPIOC, GPIO_PIN_15, 7, true)) {
+            PRINTF("C15\n");
+            Tetris_RotatePiece(false);
+        }
+        if (GPIO_pressed(GPIOA, GPIO_PIN_0, 0, false)) {
+            PRINTF("A0\n");
+            Tetris_StartGame();
+        }
+        if (GPIO_pressed(GPIOA, GPIO_PIN_1, 1, false)) {
+            PRINTF("A1\n");
+            while (Tetris_Move(0, 1))
+                ;
+        }
+        if (GPIO_pressed(GPIOA, GPIO_PIN_2, 2, true)) {
+            PRINTF("A2\n");
+            Tetris_Move(1, 0);
+        }
+        if (GPIO_pressed(GPIOA, GPIO_PIN_3, 3, false)) {
+            PRINTF("A3\n");
+            Tetris_RotatePiece(true);
+            Tetris_RotatePiece(true);
+        }
+        if (GPIO_pressed(GPIOA, GPIO_PIN_4, 4, true)) {
+            PRINTF("A4\n");
+            Tetris_Move(-1, 0);
+        }
+        if (GPIO_pressed(GPIOA, GPIO_PIN_5, 5, true)) {
+            PRINTF("A5\n");
+            Tetris_Move(0, 1);
         }
 
-        if (usb_rx_buf[0] != 0) {
-            char key = usb_rx_buf[0];
-            usb_rx_buf[0] = 0;
-            // PRINTF("r: %c\n", key);
-            switch (key) {
-                case 'z':
-                    Tetris_RotatePiece(false);
-                    break;
-                // case 'w':
-                case 'x':
-                case 'A':
-                    Tetris_RotatePiece(true);
-                    break;
-                // case 'a':
-                case 'D':
-                    Tetris_Move(-1, 0);
-                    break;
-                // case 's':
-                case 'B':
-                    Tetris_Move(0, 1);
-                    break;
-                // case 'd':
-                case 'C':
-                    Tetris_Move(1, 0);
-                    break;
-            }
-        }
+        // if (usb_rx_buf[0] != 0) {
+        //     char key = usb_rx_buf[0];
+        //     usb_rx_buf[0] = 0;
+        //     PRINTF("r: %c\n", key);
+        //     switch (key) {
+        //         case 'z':
+        //         case '/':
+        //             Tetris_RotatePiece(false);
+        //             break;
+        //         // case 'w':
+        //         case 'x':
+        //         case 'A':
+        //             Tetris_RotatePiece(true);
+        //             break;
+        //         // case 'a':
+        //         case 'D':
+        //             Tetris_Move(-1, 0);
+        //             break;
+        //         // case 's':
+        //         case 'B':
+        //             Tetris_Move(0, 1);
+        //             break;
+        //         // case 'd':
+        //         case 'C':
+        //             Tetris_Move(1, 0);
+        //             break;
+        //     }
+        // }
 
         Tetris_Loop();
         /* USER CODE END WHILE */
@@ -214,17 +278,18 @@ static void MX_GPIO_Init(void) {
     /*Configure GPIO pin Output Level */
     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
 
-    /*Configure GPIO pin : PC13 */
-    GPIO_InitStruct.Pin = GPIO_PIN_13;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    /*Configure GPIO pin : PC14, PC15 */
+    GPIO_InitStruct.Pin = GPIO_PIN_14 | GPIO_PIN_15;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-    /*Configure GPIO pin : PA0 */
-    GPIO_InitStruct.Pin = GPIO_PIN_0;
+    /*Configure GPIO pin : PA0, PA1, PA2, PA3, PA4, PA5 */
+    GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5;
     GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
     /*Configure GPIO pin : PB2 */

@@ -1,3 +1,5 @@
+#include "main.h"
+#include "printf.h"
 #include "stdbool.h"
 #include "stdint.h"
 #include "stdio.h"
@@ -18,13 +20,7 @@
 #define DISPLAY_HEIGHT 20
 #define DISPLAY_SIZE (DISPLAY_WIDTH * DISPLAY_HEIGHT)
 
-extern char usb_tx_buf[];
-// #define PRINTF(fmt, args...) sprintf(uart_tx_buf + strlen(uart_tx_buf), fmt, ##args)
-#define PRINTF(fmt, args...) ({                                                    \
-    sprintf(usb_tx_buf, fmt, ##args);                                              \
-    while (CDC_Transmit_FS((uint8_t*)usb_tx_buf, strlen(usb_tx_buf)) == USBD_BUSY) \
-        ;                                                                          \
-})
+#define TEXT_PADDING 4
 
 #define NUM_OF_TETRIMINOS 7
 enum Tetrimino {
@@ -56,8 +52,8 @@ enum Tetrimino {
 #define TETRIMINO_HEIGHT 4
 #define TETRIMINO_SIZE (TETRIMINO_WIDTH * TETRIMINO_HEIGHT)
 #define TETRIMINO_PX_SIZE 24
-#define TETRIMINO_PX_TOP_LEFT_PADDING 3
-#define TETRIMINO_PX_BOT_RIGHT_PADDING 2
+#define TETRIMINO_PX_TOP_LEFT_PADDING 2
+#define TETRIMINO_PX_BOT_RIGHT_PADDING 1
 
 // clang-format off
 const uint8_t Tetrimino_Shape_I[TETRIMINO_SIZE * 4] = {
@@ -251,6 +247,7 @@ const uint16_t Tetrimino_Colors[] = {
 enum Tetrimino board[BOARD_SIZE];  // pos = x + y * BOARD_WIDTH
 enum Tetrimino prev_board[BOARD_SIZE];
 enum Tetrimino cur_tetrimino = Tetrimino_Empty;
+enum Tetrimino next_tetrimino = Tetrimino_Empty;
 
 // current rotation and position of falling tetrimino
 uint8_t cur_rotation = 0;
@@ -265,6 +262,7 @@ uint8_t clines_len = 0;
 uint8_t wait_ticks = 0;
 
 uint32_t cur_score = 0;
+uint32_t lines_cleared = 0;
 
 // get position of square based on tetrimino's coordinates
 uint8_t get_cur_pos(uint8_t tx, uint8_t ty) {
@@ -311,13 +309,46 @@ void update_screen(bool force) {
         }
     }
 
+    static enum Tetrimino prev_next_tetrimino = Tetrimino_Empty;
+
+    if (prev_next_tetrimino != next_tetrimino || force) {
+        prev_next_tetrimino = next_tetrimino;
+        const uint8_t* cur_shape = Tetrimino_Shapes[next_tetrimino];
+        const uint16_t size = TETRIMINO_PX_SIZE / 4 * 3;
+        const uint16_t draw_size = size - 2;
+
+        for (uint8_t ty = 0; ty < 2; ty++) {
+            for (uint8_t tx = 0; tx < TETRIMINO_WIDTH; tx++) {
+                uint16_t px_x = TETRIMINO_PX_SIZE * DISPLAY_WIDTH + 2 * TEXT_PADDING + tx * size;
+                uint16_t px_y = 1 * TETRIMINO_PX_SIZE + ty * size + 1;
+
+                if (cur_shape[tx + ty * TETRIMINO_WIDTH]) {
+                    BSP_LCD_SetTextColor(Tetrimino_Colors[next_tetrimino]);
+                } else {
+                    BSP_LCD_SetTextColor(Tetrimino_Colors[Tetrimino_Empty]);
+                }
+                BSP_LCD_FillRect(px_x, px_y, draw_size, draw_size);
+            }
+        }
+    }
+
     static uint32_t prev_score = 0;
     // update score
     if (prev_score != cur_score || force) {
         prev_score = cur_score;
         char score_str[12];  // -ve sign, 10 digits, nul term
-        sprintf(score_str, "%u", cur_score);
-        BSP_LCD_DisplayStringAtLine(0, score_str);
+        sprintf(score_str, "%lu", cur_score);
+        char lines_str[12];
+        sprintf(lines_str, "%lu", lines_cleared);
+        char levels_str[12];
+        sprintf(levels_str, "%lu", lines_cleared / 10 + 1);
+        BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+        BSP_LCD_SetFont(&Font24);
+        BSP_LCD_DisplayStringAt(TETRIMINO_PX_SIZE * DISPLAY_WIDTH + TEXT_PADDING, 4 * TETRIMINO_PX_SIZE, (uint8_t*)score_str, LEFT_MODE);
+        BSP_LCD_DisplayStringAt(TETRIMINO_PX_SIZE * DISPLAY_WIDTH + TEXT_PADDING, 6 * TETRIMINO_PX_SIZE, (uint8_t*)lines_str, LEFT_MODE);
+        BSP_LCD_DisplayStringAt(TETRIMINO_PX_SIZE * DISPLAY_WIDTH + TEXT_PADDING, 8 * TETRIMINO_PX_SIZE, (uint8_t*)levels_str, LEFT_MODE);
+
+        PRINTF("update score %s\n", score_str);
     }
 }
 
@@ -343,7 +374,8 @@ bool check_collision(uint8_t new_x, uint8_t new_y, uint8_t new_rot) {
 
 bool Tetris_SpawnPiece() {
     PRINTF("spawn piece\n");
-    cur_tetrimino = (enum Tetrimino)(rand() % NUM_OF_TETRIMINOS + 1);
+    cur_tetrimino = next_tetrimino;
+    next_tetrimino = (enum Tetrimino)(rand() % NUM_OF_TETRIMINOS + 1);
     cur_rotation = 0;
 
     const uint8_t* cur_shape = Tetrimino_Shapes[cur_tetrimino];  // rotation = 0
@@ -465,18 +497,19 @@ void drop_lines() {
     // update score
     switch (clines_len) {
         case 1:
-            cur_score += 40;
+            cur_score += 40 * (lines_cleared / 10 + 1);
             break;
         case 2:
-            cur_score += 100;
+            cur_score += 100 * (lines_cleared / 10 + 1);
             break;
         case 3:
-            cur_score += 300;
+            cur_score += 300 * (lines_cleared / 10 + 1);
             break;
         case 4:
-            cur_score += 1200;
+            cur_score += 1200 * (lines_cleared / 10 + 1);
             break;
     }
+    lines_cleared += clines_len;
     clines_len = 0;
 }
 
@@ -485,12 +518,16 @@ void Tetris_StartGame() {
     memset(board, Tetrimino_Empty, BOARD_SIZE);
     memset(prev_board, Tetrimino_Empty, BOARD_SIZE);
     clines_len = 0;
-    cur_tetrimino = Tetrimino_Empty;
+    lines_cleared = 0;
+    cur_tetrimino = (enum Tetrimino)(rand() % NUM_OF_TETRIMINOS + 1);
+    next_tetrimino = (enum Tetrimino)(rand() % NUM_OF_TETRIMINOS + 1);
     cur_rotation = 0;
     cur_x = 0;
     cur_y = 0;
     wait_ticks = 0;
     cur_score = 0;
+
+    BSP_LCD_Clear(LCD_COLOR_BLACK);
 
     // draw vertical lines
     for (int x = 0; x <= DISPLAY_WIDTH; x++) {
@@ -510,6 +547,15 @@ void Tetris_StartGame() {
             BSP_LCD_SetTextColor(0x4208);
         BSP_LCD_DrawLine(0, y * TETRIMINO_PX_SIZE, DISPLAY_WIDTH * TETRIMINO_PX_SIZE, y * TETRIMINO_PX_SIZE);
     }
+
+    // draw score
+    BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+    BSP_LCD_SetFont(&Font20);
+    BSP_LCD_DisplayStringAt(TETRIMINO_PX_SIZE * DISPLAY_WIDTH + TEXT_PADDING, TEXT_PADDING, (uint8_t*)"NEXT", LEFT_MODE);
+    BSP_LCD_DisplayStringAt(TETRIMINO_PX_SIZE * DISPLAY_WIDTH + TEXT_PADDING, 3 * TETRIMINO_PX_SIZE, (uint8_t*)"SCORE", LEFT_MODE);
+    BSP_LCD_DisplayStringAt(TETRIMINO_PX_SIZE * DISPLAY_WIDTH + TEXT_PADDING, 5 * TETRIMINO_PX_SIZE, (uint8_t*)"LINES", LEFT_MODE);
+    BSP_LCD_DisplayStringAt(TETRIMINO_PX_SIZE * DISPLAY_WIDTH + TEXT_PADDING, 7 * TETRIMINO_PX_SIZE, (uint8_t*)"LEVEL", LEFT_MODE);
+
     update_screen(true);
 }
 
@@ -575,9 +621,8 @@ bool Tetris_RotatePiece(bool clockwise) {
             if (IS_FALLING_TETRIMINO(board[pos]))
                 board[pos] = Tetrimino_Empty;
 
-            if (new_shape[tx + ty * TETRIMINO_WIDTH]) {
+            if (new_shape[tx + ty * TETRIMINO_WIDTH])
                 board[pos] = CONVERT_FALLING_TETRIMINO(cur_tetrimino);
-            }
         }
     }
 

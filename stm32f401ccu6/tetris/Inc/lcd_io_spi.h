@@ -28,7 +28,7 @@
 /* Lcd control pins assign (A..K, 0..15)
    - if hardware SPI: SCK, MOSI, MISO pins assign is lock to hardware */
 #define LCD_RST X, 0 /* If not used leave it that way */
-#define LCD_RS B, 6
+#define LCD_RS B, 8
 
 #define LCD_CS B, 9
 #define LCD_SCK B, 3
