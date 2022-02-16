@@ -133,15 +133,18 @@ int main(void) {
     /* Initialize all configured peripherals */
     MX_GPIO_Init();
     MX_USB_DEVICE_Init();
-    /* USER CODE BEGIN 2 */
-    // PRINTF("start\n");
+/* USER CODE BEGIN 2 */
+#ifdef DEBUG
+    USBD_CDC_SetRxBuffer(&hUsbDeviceFS, (uint8_t *)usb_rx_buf);
+    USBD_CDC_ReceivePacket(&hUsbDeviceFS);
+    memset(usb_rx_buf, 0, sizeof(usb_rx_buf));
+#endif
+    PRINTF("start\n");
+    srand48(HAL_GetTick());
     BSP_LCD_Init();
     BSP_LCD_Clear(LCD_COLOR_BLACK);
     Tetris_StartGame();
-    // USBD_CDC_SetRxBuffer(&hUsbDeviceFS, (uint8_t *)usb_rx_buf);
-    // USBD_CDC_ReceivePacket(&hUsbDeviceFS);
-    // memset(usb_rx_buf, 0, sizeof(usb_rx_buf));
-    // HAL_UART_Transmit(&huart1, "testing\n", 9, 10);
+
     /* USER CODE END 2 */
 
     /* Infinite loop */
@@ -160,12 +163,12 @@ int main(void) {
         }
         if (GPIO_pressed(GPIOA, GPIO_PIN_0, 0, false)) {
             PRINTF("A0\n");
-            Tetris_StartGame();
+            while (Tetris_Move(0, 1))
+                ;
         }
         if (GPIO_pressed(GPIOA, GPIO_PIN_1, 1, false)) {
             PRINTF("A1\n");
-            while (Tetris_Move(0, 1))
-                ;
+            Tetris_StartGame();
         }
         if (GPIO_pressed(GPIOA, GPIO_PIN_2, 2, true)) {
             PRINTF("A2\n");
@@ -185,34 +188,36 @@ int main(void) {
             Tetris_Move(0, 1);
         }
 
-        // if (usb_rx_buf[0] != 0) {
-        //     char key = usb_rx_buf[0];
-        //     usb_rx_buf[0] = 0;
-        //     PRINTF("r: %c\n", key);
-        //     switch (key) {
-        //         case 'z':
-        //         case '/':
-        //             Tetris_RotatePiece(false);
-        //             break;
-        //         // case 'w':
-        //         case 'x':
-        //         case 'A':
-        //             Tetris_RotatePiece(true);
-        //             break;
-        //         // case 'a':
-        //         case 'D':
-        //             Tetris_Move(-1, 0);
-        //             break;
-        //         // case 's':
-        //         case 'B':
-        //             Tetris_Move(0, 1);
-        //             break;
-        //         // case 'd':
-        //         case 'C':
-        //             Tetris_Move(1, 0);
-        //             break;
-        //     }
-        // }
+#ifdef DEBUG
+        if (usb_rx_buf[0] != 0) {
+            char key = usb_rx_buf[0];
+            usb_rx_buf[0] = 0;
+            PRINTF("r: %c\n", key);
+            switch (key) {
+                case 'z':
+                case '/':
+                    Tetris_RotatePiece(false);
+                    break;
+                // case 'w':
+                case 'x':
+                case 'A':
+                    Tetris_RotatePiece(true);
+                    break;
+                // case 'a':
+                case 'D':
+                    Tetris_Move(-1, 0);
+                    break;
+                // case 's':
+                case 'B':
+                    Tetris_Move(0, 1);
+                    break;
+                // case 'd':
+                case 'C':
+                    Tetris_Move(1, 0);
+                    break;
+            }
+        }
+#endif
 
         Tetris_Loop();
         /* USER CODE END WHILE */

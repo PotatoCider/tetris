@@ -9,7 +9,11 @@
 #include "string.h"
 #include "usbd_cdc_if.h"
 
-#define TICK_MS 300
+#define BASE_TICK_MS 1000
+#define MIN_TICK_MS 20
+#define LEVEL_TICK_MULTIPLIER_1_3 150
+#define LEVEL_TICK_MULTIPLIER_4_10 50
+#define LEVEL_TICK_MULTIPLIER_11_INF 10
 
 #define BOARD_WIDTH 10
 #define BOARD_HEIGHT 24
@@ -44,7 +48,8 @@ enum Tetrimino {
 };
 
 #define IS_FALLING_TETRIMINO(T) (T & Falling_Tetrimino)
-#define IS_STATIONARY_TETRIMINO(T) (!IS_FALLING_TETRIMINO(T) && T != Tetrimino_Empty)
+#define IS_VISUAL_TETRIMINO(T) (T & Visual_Tetrimino)
+#define IS_STATIONARY_TETRIMINO(T) (!IS_FALLING_TETRIMINO(T) && !IS_VISUAL_TETRIMINO(T) && T != Tetrimino_Empty)
 #define CONVERT_FALLING_TETRIMINO(T) (T | Falling_Tetrimino)
 #define CONVERT_STATIONARY_TETRIMINO(T) (T & ~Falling_Tetrimino)
 
@@ -258,6 +263,8 @@ uint8_t cur_y = 0;
 uint8_t clines[TETRIMINO_HEIGHT];
 uint8_t clines_len = 0;
 
+uint32_t droptick_period = BASE_TICK_MS;
+
 // how many ticks to wait before collision check & gravity
 uint8_t wait_ticks = 0;
 
@@ -267,6 +274,10 @@ uint32_t lines_cleared = 0;
 // get position of square based on tetrimino's coordinates
 uint8_t get_cur_pos(uint8_t tx, uint8_t ty) {
     return tx + cur_x + (ty + cur_y) * BOARD_WIDTH;
+}
+
+uint32_t get_cur_level() {
+    return lines_cleared / 10 + 1;
 }
 
 void debug_print_board() {
@@ -341,7 +352,7 @@ void update_screen(bool force) {
         char lines_str[12];
         sprintf(lines_str, "%lu", lines_cleared);
         char levels_str[12];
-        sprintf(levels_str, "%lu", lines_cleared / 10 + 1);
+        sprintf(levels_str, "%lu", get_cur_level());
         BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
         BSP_LCD_SetFont(&Font24);
         BSP_LCD_DisplayStringAt(TETRIMINO_PX_SIZE * DISPLAY_WIDTH + TEXT_PADDING, 4 * TETRIMINO_PX_SIZE, (uint8_t*)score_str, LEFT_MODE);
@@ -494,22 +505,38 @@ void drop_lines() {
         if (empty) break;
     }
 
-    // update score
+    // update score based on level
+    uint32_t level = get_cur_level();
     switch (clines_len) {
         case 1:
-            cur_score += 40 * (lines_cleared / 10 + 1);
+            cur_score += 40 * level;
             break;
         case 2:
-            cur_score += 100 * (lines_cleared / 10 + 1);
+            cur_score += 100 * level;
             break;
         case 3:
-            cur_score += 300 * (lines_cleared / 10 + 1);
+            cur_score += 300 * level;
             break;
         case 4:
-            cur_score += 1200 * (lines_cleared / 10 + 1);
+            cur_score += 1200 * level;
             break;
     }
+    uint32_t prev_level = get_cur_level();
     lines_cleared += clines_len;
+    uint32_t new_level = get_cur_level();
+
+    if (prev_level != new_level) {
+        if (prev_level <= 3)
+            droptick_period -= LEVEL_TICK_MULTIPLIER_1_3;
+        else if (prev_level <= 10)
+            droptick_period -= LEVEL_TICK_MULTIPLIER_4_10;
+        else
+            droptick_period -= LEVEL_TICK_MULTIPLIER_11_INF;
+
+        if (droptick_period < MIN_TICK_MS) droptick_period = MIN_TICK_MS;
+        PRINTF("update tick %lu", droptick_period);
+    }
+
     clines_len = 0;
 }
 
@@ -519,11 +546,12 @@ void Tetris_StartGame() {
     memset(prev_board, Tetrimino_Empty, BOARD_SIZE);
     clines_len = 0;
     lines_cleared = 0;
-    cur_tetrimino = (enum Tetrimino)(rand() % NUM_OF_TETRIMINOS + 1);
+    droptick_period = BASE_TICK_MS;
+    // cur_tetrimino = (enum Tetrimino)(rand() % NUM_OF_TETRIMINOS + 1);
     next_tetrimino = (enum Tetrimino)(rand() % NUM_OF_TETRIMINOS + 1);
     cur_rotation = 0;
-    cur_x = 0;
-    cur_y = 0;
+    cur_x = BOARD_WIDTH / 2 - TETRIMINO_WIDTH / 2;
+    cur_y = 4;
     wait_ticks = 0;
     cur_score = 0;
 
@@ -559,20 +587,20 @@ void Tetris_StartGame() {
     update_screen(true);
 }
 
-void Tetris_Tick() {
+void Tetris_Tick(bool drop) {
     // debug_print_board();
     if (cur_tetrimino == Tetrimino_Empty) {
         bool spawn_ok = Tetris_SpawnPiece();
         if (!spawn_ok) return Tetris_StartGame();
 
         wait_ticks = 1;
-        update_screen(false);
+        update_screen(true);
         return;
     }
 
     if (clines_len > 0) drop_lines();
 
-    bool move_ok = Tetris_Move(0, 1);
+    if (drop) Tetris_Move(0, 1);
     // if (move_ok) PRINTF("move down\n");
 
     if (wait_ticks > 0) {
@@ -581,7 +609,7 @@ void Tetris_Tick() {
         return;
     }
 
-    if (!move_ok) {
+    if (check_collision(cur_x, cur_y + 1, cur_rotation)) {
         // PRINTF("stick\n");
         stick_cur_tetrimino();
         bool lc = clear_lines();
@@ -594,12 +622,19 @@ void Tetris_Tick() {
 }
 
 void Tetris_Loop() {
+    static uint32_t last_droptick_ts = 0;
     static uint32_t last_tick_ts = 0;
 
     uint32_t now = HAL_GetTick();
-    if (now - last_tick_ts > TICK_MS) {
+    if (now - last_droptick_ts > droptick_period) {
         last_tick_ts = now;
-        Tetris_Tick();
+        last_droptick_ts = now;
+        Tetris_Tick(true);
+        // PRINTF("tick\n");
+    }
+    if (now - last_tick_ts > 250) {
+        last_tick_ts = now;
+        Tetris_Tick(false);
         // PRINTF("tick\n");
     }
 }
