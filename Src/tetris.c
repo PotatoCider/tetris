@@ -18,7 +18,8 @@
 #define BOARD_WIDTH 10
 #define BOARD_HEIGHT 24
 #define BOARD_SIZE (BOARD_WIDTH * BOARD_HEIGHT)
-#define IS_BOARD_OOB(x, y) ((uint8_t)(x) >= BOARD_WIDTH || (uint8_t)(y) >= BOARD_HEIGHT)
+#define IS_BOARD_OOB(x, y) \
+    ((uint8_t)(x) >= BOARD_WIDTH || (uint8_t)(y) >= BOARD_HEIGHT)
 
 #define DISPLAY_WIDTH 10
 #define DISPLAY_HEIGHT 20
@@ -44,12 +45,15 @@ enum Tetrimino {
     Falling_Tetrimino_S,
     Falling_Tetrimino_T,
     Falling_Tetrimino_Z,
-    Visual_Tetrimino = 0x10,  // used to visualize where falling piece hard drops
+    Visual_Tetrimino =
+        0x10,  // used to visualize where falling piece hard drops
 };
 
 #define IS_FALLING_TETRIMINO(T) (T & Falling_Tetrimino)
 #define IS_VISUAL_TETRIMINO(T) (T & Visual_Tetrimino)
-#define IS_STATIONARY_TETRIMINO(T) (!IS_FALLING_TETRIMINO(T) && !IS_VISUAL_TETRIMINO(T) && T != Tetrimino_Empty)
+#define IS_STATIONARY_TETRIMINO(T)                          \
+    (!IS_FALLING_TETRIMINO(T) && !IS_VISUAL_TETRIMINO(T) && \
+     T != Tetrimino_Empty)
 #define CONVERT_FALLING_TETRIMINO(T) (T | Falling_Tetrimino)
 #define CONVERT_STATIONARY_TETRIMINO(T) (T & ~Falling_Tetrimino)
 
@@ -210,7 +214,7 @@ const uint8_t Tetrimino_Shape_Z[TETRIMINO_SIZE * 4] = {
 };
 // clang-format on
 
-const uint8_t* Tetrimino_Shapes[] = {
+const uint8_t *Tetrimino_Shapes[] = {
     [Tetrimino_Empty] = NULL,
     [Tetrimino_I] = Tetrimino_Shape_I,
     [Tetrimino_J] = Tetrimino_Shape_J,
@@ -253,6 +257,9 @@ enum Tetrimino board[BOARD_SIZE];  // pos = x + y * BOARD_WIDTH
 enum Tetrimino prev_board[BOARD_SIZE];
 enum Tetrimino cur_tetrimino = Tetrimino_Empty;
 enum Tetrimino next_tetrimino = Tetrimino_Empty;
+enum Tetrimino hold_tetrimino = Tetrimino_Empty;
+
+bool already_held_tetrimino = false;
 
 // current rotation and position of falling tetrimino
 uint8_t cur_rotation = 0;
@@ -276,9 +283,7 @@ uint8_t get_cur_pos(uint8_t tx, uint8_t ty) {
     return tx + cur_x + (ty + cur_y) * BOARD_WIDTH;
 }
 
-uint32_t get_cur_level() {
-    return lines_cleared / 10 + 1;
-}
+uint32_t get_cur_level() { return lines_cleared / 10 + 1; }
 
 void debug_print_board() {
     for (uint8_t y = 0; y < BOARD_HEIGHT; y++) {
@@ -302,10 +307,30 @@ void debug_print_board() {
 void draw(uint8_t x, uint8_t y, volatile uint16_t color) {
     uint16_t px_x = x * TETRIMINO_PX_SIZE + TETRIMINO_PX_TOP_LEFT_PADDING;
     uint16_t px_y = y * TETRIMINO_PX_SIZE + TETRIMINO_PX_TOP_LEFT_PADDING;
-    uint16_t px_length = TETRIMINO_PX_SIZE - TETRIMINO_PX_TOP_LEFT_PADDING - TETRIMINO_PX_BOT_RIGHT_PADDING;
+    uint16_t px_length = TETRIMINO_PX_SIZE - TETRIMINO_PX_TOP_LEFT_PADDING -
+                         TETRIMINO_PX_BOT_RIGHT_PADDING;
 
     BSP_LCD_SetTextColor(color);
     BSP_LCD_FillRect(px_x, px_y, px_length, px_length);
+}
+
+void draw_tetrimino_at(enum Tetrimino tetrimino, uint16_t rel_x, uint16_t rel_y,
+                       uint16_t size, volatile uint16_t color) {
+    const uint8_t *cur_shape = Tetrimino_Shapes[tetrimino];
+
+    for (uint8_t ty = 0; ty < 2; ty++) {
+        for (uint8_t tx = 0; tx < TETRIMINO_WIDTH; tx++) {
+            uint16_t px_x = rel_x + tx * size + 1;
+            uint16_t px_y = rel_y + ty * size + 1;
+
+            if (cur_shape[tx + ty * TETRIMINO_WIDTH]) {
+                BSP_LCD_SetTextColor(color);
+            } else {
+                BSP_LCD_SetTextColor(Tetrimino_Colors[Tetrimino_Empty]);
+            }
+            BSP_LCD_FillRect(px_x, px_y, size - 2, size - 2);
+        }
+    }
 }
 
 void update_screen(bool force) {
@@ -321,26 +346,27 @@ void update_screen(bool force) {
     }
 
     static enum Tetrimino prev_next_tetrimino = Tetrimino_Empty;
+    static enum Tetrimino prev_hold_tetrimino = Tetrimino_Empty;
 
+    // draw next piece
     if (prev_next_tetrimino != next_tetrimino || force) {
         prev_next_tetrimino = next_tetrimino;
-        const uint8_t* cur_shape = Tetrimino_Shapes[next_tetrimino];
-        const uint16_t size = TETRIMINO_PX_SIZE / 4 * 3;
-        const uint16_t draw_size = size - 2;
 
-        for (uint8_t ty = 0; ty < 2; ty++) {
-            for (uint8_t tx = 0; tx < TETRIMINO_WIDTH; tx++) {
-                uint16_t px_x = TETRIMINO_PX_SIZE * DISPLAY_WIDTH + 2 * TEXT_PADDING + tx * size;
-                uint16_t px_y = 1 * TETRIMINO_PX_SIZE + ty * size + 1;
+        draw_tetrimino_at(next_tetrimino,
+                          TETRIMINO_PX_SIZE * DISPLAY_WIDTH + 2 * TEXT_PADDING,
+                          1 * TETRIMINO_PX_SIZE, TETRIMINO_PX_SIZE / 4 * 3,
+                          Tetrimino_Colors[next_tetrimino]);
+    }
 
-                if (cur_shape[tx + ty * TETRIMINO_WIDTH]) {
-                    BSP_LCD_SetTextColor(Tetrimino_Colors[next_tetrimino]);
-                } else {
-                    BSP_LCD_SetTextColor(Tetrimino_Colors[Tetrimino_Empty]);
-                }
-                BSP_LCD_FillRect(px_x, px_y, draw_size, draw_size);
-            }
-        }
+    if (prev_hold_tetrimino != hold_tetrimino || force) {
+        prev_hold_tetrimino = hold_tetrimino;
+
+        draw_tetrimino_at(hold_tetrimino,
+                          TETRIMINO_PX_SIZE * DISPLAY_WIDTH + 2 * TEXT_PADDING,
+                          11 * TETRIMINO_PX_SIZE, TETRIMINO_PX_SIZE / 4 * 3,
+                          already_held_tetrimino
+                              ? LCD_COLOR_GRAY
+                              : Tetrimino_Colors[hold_tetrimino]);
     }
 
     static uint32_t prev_score = 0;
@@ -354,18 +380,68 @@ void update_screen(bool force) {
         char levels_str[12];
         sprintf(levels_str, "%lu", get_cur_level());
         BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
-        BSP_LCD_SetFont(&Font24);
-        BSP_LCD_DisplayStringAt(TETRIMINO_PX_SIZE * DISPLAY_WIDTH + TEXT_PADDING, 4 * TETRIMINO_PX_SIZE, (uint8_t*)score_str, LEFT_MODE);
-        BSP_LCD_DisplayStringAt(TETRIMINO_PX_SIZE * DISPLAY_WIDTH + TEXT_PADDING, 6 * TETRIMINO_PX_SIZE, (uint8_t*)lines_str, LEFT_MODE);
-        BSP_LCD_DisplayStringAt(TETRIMINO_PX_SIZE * DISPLAY_WIDTH + TEXT_PADDING, 8 * TETRIMINO_PX_SIZE, (uint8_t*)levels_str, LEFT_MODE);
+        BSP_LCD_SetFont(&Font20);
+        BSP_LCD_DisplayStringAt(
+            TETRIMINO_PX_SIZE * DISPLAY_WIDTH + TEXT_PADDING,
+            4 * TETRIMINO_PX_SIZE, (uint8_t *)score_str, LEFT_MODE);
+        BSP_LCD_DisplayStringAt(
+            TETRIMINO_PX_SIZE * DISPLAY_WIDTH + TEXT_PADDING,
+            6 * TETRIMINO_PX_SIZE, (uint8_t *)lines_str, LEFT_MODE);
+        BSP_LCD_DisplayStringAt(
+            TETRIMINO_PX_SIZE * DISPLAY_WIDTH + TEXT_PADDING,
+            8 * TETRIMINO_PX_SIZE, (uint8_t *)levels_str, LEFT_MODE);
 
         PRINTF("update score %s\n", score_str);
+    }
+
+    if (force) {
+        // draw vertical lines
+        for (int x = 0; x <= DISPLAY_WIDTH; x++) {
+            if (x == 0 || x == DISPLAY_WIDTH)
+                BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+            else
+                BSP_LCD_SetTextColor(0x4208);
+
+            BSP_LCD_DrawLine(x * TETRIMINO_PX_SIZE, 0, x * TETRIMINO_PX_SIZE,
+                             DISPLAY_HEIGHT * TETRIMINO_PX_SIZE);
+        }
+
+        // draw horizontal lines
+        for (int y = 0; y <= DISPLAY_HEIGHT; y++) {
+            if (y == 0 || y == DISPLAY_HEIGHT)
+                BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+            else
+                BSP_LCD_SetTextColor(0x4208);
+            BSP_LCD_DrawLine(0, y * TETRIMINO_PX_SIZE,
+                             DISPLAY_WIDTH * TETRIMINO_PX_SIZE,
+                             y * TETRIMINO_PX_SIZE);
+        }
+
+        // draw score
+        BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
+        BSP_LCD_SetFont(&Font20);
+        BSP_LCD_DisplayStringAt(
+            TETRIMINO_PX_SIZE * DISPLAY_WIDTH + TEXT_PADDING, TEXT_PADDING,
+            (uint8_t *)"NEXT", LEFT_MODE);
+        BSP_LCD_DisplayStringAt(
+            TETRIMINO_PX_SIZE * DISPLAY_WIDTH + TEXT_PADDING,
+            3 * TETRIMINO_PX_SIZE, (uint8_t *)"SCORE", LEFT_MODE);
+        BSP_LCD_DisplayStringAt(
+            TETRIMINO_PX_SIZE * DISPLAY_WIDTH + TEXT_PADDING,
+            5 * TETRIMINO_PX_SIZE, (uint8_t *)"LINES", LEFT_MODE);
+        BSP_LCD_DisplayStringAt(
+            TETRIMINO_PX_SIZE * DISPLAY_WIDTH + TEXT_PADDING,
+            7 * TETRIMINO_PX_SIZE, (uint8_t *)"LEVEL", LEFT_MODE);
+        BSP_LCD_DisplayStringAt(
+            TETRIMINO_PX_SIZE * DISPLAY_WIDTH + TEXT_PADDING,
+            10 * TETRIMINO_PX_SIZE, (uint8_t *)"HOLD", LEFT_MODE);
     }
 }
 
 // return true if collision
 bool check_collision(uint8_t new_x, uint8_t new_y, uint8_t new_rot) {
-    const uint8_t* new_shape = Tetrimino_Shapes[cur_tetrimino] + new_rot * TETRIMINO_SIZE;
+    const uint8_t *new_shape =
+        Tetrimino_Shapes[cur_tetrimino] + new_rot * TETRIMINO_SIZE;
 
     for (uint8_t ty = 0; ty < TETRIMINO_HEIGHT; ty++) {
         for (uint8_t tx = 0; tx < TETRIMINO_WIDTH; tx++) {
@@ -385,16 +461,17 @@ bool check_collision(uint8_t new_x, uint8_t new_y, uint8_t new_rot) {
 
 bool Tetris_SpawnPiece() {
     PRINTF("spawn piece\n");
+    already_held_tetrimino = false;
     cur_tetrimino = next_tetrimino;
     next_tetrimino = (enum Tetrimino)(rand() % NUM_OF_TETRIMINOS + 1);
+
     cur_rotation = 0;
 
-    const uint8_t* cur_shape = Tetrimino_Shapes[cur_tetrimino];  // rotation = 0
+    const uint8_t *cur_shape = Tetrimino_Shapes[cur_tetrimino];  // rotation = 0
     cur_x = BOARD_WIDTH / 2 - TETRIMINO_WIDTH / 2;
     cur_y = 4;
 
-    if (check_collision(cur_x, cur_y, cur_rotation))
-        return false;
+    if (check_collision(cur_x, cur_y, cur_rotation)) return false;
 
     for (uint8_t ty = 0; ty < TETRIMINO_HEIGHT; ty++) {
         for (uint8_t tx = 0; tx < TETRIMINO_WIDTH; tx++) {
@@ -410,20 +487,19 @@ bool Tetris_SpawnPiece() {
 
 bool Tetris_Move(int8_t dx, int8_t dy) {
     // check collision
-    if (check_collision(cur_x + dx, cur_y + dy, cur_rotation))
-        return false;
+    if (check_collision(cur_x + dx, cur_y + dy, cur_rotation)) return false;
 
     // remove old tetrimino
     for (uint8_t ty = 0; ty < TETRIMINO_HEIGHT; ty++) {
         for (uint8_t tx = 0; tx < TETRIMINO_WIDTH; tx++) {
             uint8_t pos = get_cur_pos(tx, ty);
 
-            if (IS_FALLING_TETRIMINO(board[pos]))
-                board[pos] = Tetrimino_Empty;
+            if (IS_FALLING_TETRIMINO(board[pos])) board[pos] = Tetrimino_Empty;
         }
     }
 
-    const uint8_t* cur_shape = Tetrimino_Shapes[cur_tetrimino] + cur_rotation * TETRIMINO_SIZE;
+    const uint8_t *cur_shape =
+        Tetrimino_Shapes[cur_tetrimino] + cur_rotation * TETRIMINO_SIZE;
 
     // place new tetrimino
     for (uint8_t ty = 0; ty < TETRIMINO_HEIGHT; ty++) {
@@ -549,42 +625,49 @@ void Tetris_StartGame() {
     droptick_period = BASE_TICK_MS;
     // cur_tetrimino = (enum Tetrimino)(rand() % NUM_OF_TETRIMINOS + 1);
     next_tetrimino = (enum Tetrimino)(rand() % NUM_OF_TETRIMINOS + 1);
+    hold_tetrimino = Tetrimino_Empty;
     cur_rotation = 0;
     cur_x = BOARD_WIDTH / 2 - TETRIMINO_WIDTH / 2;
     cur_y = 4;
     wait_ticks = 0;
     cur_score = 0;
+    already_held_tetrimino = false;
 
     BSP_LCD_Clear(LCD_COLOR_BLACK);
 
-    // draw vertical lines
-    for (int x = 0; x <= DISPLAY_WIDTH; x++) {
-        if (x == 0 || x == DISPLAY_WIDTH)
-            BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
-        else
-            BSP_LCD_SetTextColor(0x4208);
-
-        BSP_LCD_DrawLine(x * TETRIMINO_PX_SIZE, 0, x * TETRIMINO_PX_SIZE, DISPLAY_HEIGHT * TETRIMINO_PX_SIZE);
-    }
-
-    // draw horizontal lines
-    for (int y = 0; y <= DISPLAY_HEIGHT; y++) {
-        if (y == 0 || y == DISPLAY_HEIGHT)
-            BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
-        else
-            BSP_LCD_SetTextColor(0x4208);
-        BSP_LCD_DrawLine(0, y * TETRIMINO_PX_SIZE, DISPLAY_WIDTH * TETRIMINO_PX_SIZE, y * TETRIMINO_PX_SIZE);
-    }
-
-    // draw score
-    BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
-    BSP_LCD_SetFont(&Font20);
-    BSP_LCD_DisplayStringAt(TETRIMINO_PX_SIZE * DISPLAY_WIDTH + TEXT_PADDING, TEXT_PADDING, (uint8_t*)"NEXT", LEFT_MODE);
-    BSP_LCD_DisplayStringAt(TETRIMINO_PX_SIZE * DISPLAY_WIDTH + TEXT_PADDING, 3 * TETRIMINO_PX_SIZE, (uint8_t*)"SCORE", LEFT_MODE);
-    BSP_LCD_DisplayStringAt(TETRIMINO_PX_SIZE * DISPLAY_WIDTH + TEXT_PADDING, 5 * TETRIMINO_PX_SIZE, (uint8_t*)"LINES", LEFT_MODE);
-    BSP_LCD_DisplayStringAt(TETRIMINO_PX_SIZE * DISPLAY_WIDTH + TEXT_PADDING, 7 * TETRIMINO_PX_SIZE, (uint8_t*)"LEVEL", LEFT_MODE);
-
     update_screen(true);
+}
+
+bool Tetris_HoldPiece() {
+    if (already_held_tetrimino) return false;
+
+    for (uint8_t ty = 0; ty < TETRIMINO_HEIGHT; ty++) {
+        for (uint8_t tx = 0; tx < TETRIMINO_WIDTH; tx++) {
+            uint8_t pos = get_cur_pos(tx, ty);
+            if (pos >= BOARD_SIZE) continue;
+            if (IS_FALLING_TETRIMINO(board[pos])) board[pos] = Tetrimino_Empty;
+        }
+    }
+
+    enum Tetrimino next = next_tetrimino;
+    next_tetrimino = hold_tetrimino;
+    hold_tetrimino = cur_tetrimino;
+
+    if (next_tetrimino == Tetrimino_Empty) {
+        next_tetrimino = next;
+        next = (enum Tetrimino)(rand() % NUM_OF_TETRIMINOS + 1);
+    }
+
+    bool spawn_ok = Tetris_SpawnPiece();
+    if (!spawn_ok) Tetris_StartGame();
+
+    already_held_tetrimino = true;
+    next_tetrimino = next;
+
+    wait_ticks = 1;
+    update_screen(true);
+
+    return true;
 }
 
 void Tetris_Tick(bool drop) {
@@ -604,13 +687,13 @@ void Tetris_Tick(bool drop) {
     // if (move_ok) PRINTF("move down\n");
 
     if (wait_ticks > 0) {
-        // PRINTF("wait\n");
+        PRINTF("wait\n");
         wait_ticks--;
         return;
     }
 
     if (check_collision(cur_x, cur_y + 1, cur_rotation)) {
-        // PRINTF("stick\n");
+        PRINTF("stick\n");
         stick_cur_tetrimino();
         bool lc = clear_lines();
 
@@ -639,22 +722,21 @@ void Tetris_Loop() {
     }
 }
 
-bool Tetris_RotatePiece(bool clockwise) {
-    uint8_t new_rotation = (cur_rotation + (clockwise ? 1 : 3)) % 4;
+bool Tetris_RotatePiece(uint8_t rotations) {
+    uint8_t new_rotation = (cur_rotation + rotations) % 4;
 
-    const uint8_t* new_shape = Tetrimino_Shapes[cur_tetrimino] + new_rotation * TETRIMINO_SIZE;
+    const uint8_t *new_shape =
+        Tetrimino_Shapes[cur_tetrimino] + new_rotation * TETRIMINO_SIZE;
 
     // check rotation collision
-    if (check_collision(cur_x, cur_y, new_rotation))
-        return false;
+    if (check_collision(cur_x, cur_y, new_rotation)) return false;
 
     // carry out rotation
     for (uint8_t ty = 0; ty < TETRIMINO_HEIGHT; ty++) {
         for (uint8_t tx = 0; tx < TETRIMINO_WIDTH; tx++) {
             uint8_t pos = get_cur_pos(tx, ty);
 
-            if (IS_FALLING_TETRIMINO(board[pos]))
-                board[pos] = Tetrimino_Empty;
+            if (IS_FALLING_TETRIMINO(board[pos])) board[pos] = Tetrimino_Empty;
 
             if (new_shape[tx + ty * TETRIMINO_WIDTH])
                 board[pos] = CONVERT_FALLING_TETRIMINO(cur_tetrimino);

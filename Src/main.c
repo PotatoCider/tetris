@@ -36,8 +36,9 @@
 /* USER CODE BEGIN PTD */
 void Tetris_StartGame(void);
 void Tetris_Loop(void);
-bool Tetris_RotatePiece(bool cw);
+bool Tetris_RotatePiece(uint8_t rotations);
 bool Tetris_Move(int8_t dx, int8_t dy);
+void Tetris_HoldPiece(void);
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -153,13 +154,14 @@ int main(void) {
     while (1) {
         uint32_t now = HAL_GetTick();
 
-        if (GPIO_pressed(GPIOC, GPIO_PIN_14, 6, true)) {
+        if (GPIO_pressed(GPIOC, GPIO_PIN_14, 6, false)) {
             PRINTF("C14\n");
-            Tetris_RotatePiece(true);
+            Tetris_RotatePiece(1);
         }
-        if (GPIO_pressed(GPIOC, GPIO_PIN_15, 7, true)) {
+        if (GPIO_pressed(GPIOC, GPIO_PIN_15, 7, false)) {
             PRINTF("C15\n");
-            Tetris_RotatePiece(false);
+            // Tetris_RotatePiece(false);
+            Tetris_HoldPiece();
         }
         if (GPIO_pressed(GPIOA, GPIO_PIN_0, 0, false)) {
             PRINTF("A0\n");
@@ -176,8 +178,7 @@ int main(void) {
         }
         if (GPIO_pressed(GPIOA, GPIO_PIN_3, 3, false)) {
             PRINTF("A3\n");
-            Tetris_RotatePiece(true);
-            Tetris_RotatePiece(true);
+            Tetris_RotatePiece(3);
         }
         if (GPIO_pressed(GPIOA, GPIO_PIN_4, 4, true)) {
             PRINTF("A4\n");
